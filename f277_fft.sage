@@ -6,9 +6,9 @@ warnings.filterwarnings('ignore')
 if __name__ == "__main__":
 
     N = 277
-    max_n = 20
-    max_n_hecke = 6
-    p = 2
+    max_n = 6
+    max_n_hecke = 3
+    p = 0
 
     block_ds_f_277 = [
         [2,4,4,4,5,6,8,9,10,14],

@@ -227,9 +227,9 @@ def polymul2d(a, b):
 
     shape = (a.shape[0] + b.shape[0], a.shape[1] + b.shape[1])
 
-    a = np.fft.fft2(a, shape).astype("complex128")
+    a = np.fft.fft2(a, shape)
     # print("First FFT done.")
-    b = np.fft.fft2(b, shape).astype("complex128")
+    b = np.fft.fft2(b, shape)
     # print("Second FFT done.")
 
     a *= b
