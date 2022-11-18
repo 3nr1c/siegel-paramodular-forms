@@ -30,10 +30,18 @@ def read_coefficients(file):
     return coefficients
 
 
-def specialization_q_expansion(f, N, s, t=matrix.zero(2), max_n=20, boxes=None, warnings=True):
+def specialization_q_expansion(f, N, s, t=matrix.zero(2), m=0, max_n=20, boxes=None, warnings=True):
     q_expansion = defaultdict(int)
-    F = CyclotomicField(t.denominator())
-    S.<q> = PuiseuxSeriesRing(F, sparse=True)
+    try:
+        den = max(1, t.denominator())
+    except:
+        den = 1
+    if m == 0:
+        FF = CyclotomicField(den) if den > 1 else QQ
+    else:
+        F = CyclotomicField(den) if den > 1 else QQ
+        FF = F.residue_field(m) if F == QQ else F.residue_field(F.prime_above(m))
+    S.<q> = PuiseuxSeriesRing(FF, sparse=True)
 
     q_expansion = S(0)
 
@@ -57,7 +65,11 @@ def specialization_q_expansion(f, N, s, t=matrix.zero(2), max_n=20, boxes=None, 
                 if U_legendre == T_legendre and aut_T_equivalent(U_legendre, v, w):
                     found_flag = True
                     Tt = (T * t).trace()
-                    q_expansion += F(exp(2*pi*I*Tt) * aT) * q^e
+
+                    if aT.parent().characteristic() != 0:
+                        q_expansion += FF(exp(2*pi*I*Tt) * aT.lift()) * q^e
+                    else:
+                        q_expansion += FF(exp(2*pi*I*Tt) * aT) * q^e
                     break
             if not found_flag:
                 print(f"Warning - might be missing for trace {e}: T = {(T[1][1],2*T[1][0],T[0][0])}, det(T) = {detT}")
@@ -161,22 +173,22 @@ def Hecke_Tp_q(f, s, p, N=277, max_n=20, warnings=None):
         return specialization_q_expansion(f, N, s, max_n=max_n)
 
 
-def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
+def Hecke_Tp_q_GritQ(Grits, f_G, s, p, m=0, N=277, max_n=20, warnings=None):
     a, b, c = s[0][0], s[0][1], s[1][1]*N
     G = p*s
     Grit_ps = [
         specialization_q_expansion(f, N,
-        G,
+        G, m=m,
         max_n=max_n, warnings=warnings)
         for f in Grits
     ]
     Tpf = p * f_G(Grit_ps)
     
-    G = Matrix([[a/p, b], [b,p*c/N]])
+    G = matrix(QQ, [[a/p, b], [b,p*c/N]])
     if a % p != 0:
         Grit_i = [
             specialization_q_expansion(f, N,
-            G,
+            G, m=m,
             max_n=max_n, warnings=warnings)
             for f in Grits
         ]
@@ -186,8 +198,8 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
         for i in range(p):
             Grit_i = [
                 specialization_q_expansion(f, N,
-                G,
-                t=Matrix([[i/p,0],[0,0]]),
+                G, m=m,
+                t=matrix(QQ, [[i/p,0],[0,0]]),
                 max_n=max_n,
                 boxes=G_box)
                 for f in Grits
@@ -197,13 +209,13 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
     ##########################
 
     for i in range(p):
-        G = Matrix([[p*a, b+i*a], [b+i*a, (c/N + 2*i*b + i^2*a)/p]])
+        G = matrix(QQ, [[p*a, b+i*a], [b+i*a, (c/N + 2*i*b + i^2*a)/p]])
         G_box = list(S_box(N, G, max_n, 0))
 
         if (c + 2*i*b*N + i^2*a*N) % p != 0:
             Grit_i = [
                 specialization_q_expansion(f, N,
-                G,
+                G, m=m,
                     max_n=max_n,
                     boxes=G_box)
                 for f in Grits
@@ -213,8 +225,8 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
             for j in range(p):
                 Grit_ij = [
                     specialization_q_expansion(f, N,
-                    G,
-                    t=Matrix([[0,0],[0,j/p]]),
+                    G, m=m,
+                    t=matrix(QQ, [[0,0],[0,j/p]]),
                     max_n=max_n,
                     boxes=G_box)
                     for f in Grits
@@ -231,8 +243,8 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
             for k in range(p):
                 Grit_jk = [
                     specialization_q_expansion(f, N,
-                    G,
-                    t=Matrix([[0,j/p],[j/p,k/p]]),
+                    G, m=m,
+                    t=matrix(QQ, [[0,j/p],[j/p,k/p]]),
                     max_n=max_n,
                     boxes=G_box)
                     for f in Grits
@@ -243,8 +255,8 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
             for k in range(p):
                 Grit_ik = [
                     specialization_q_expansion(f, N,
-                    G,
-                    t=Matrix([[i/p,0],[0,k/p]]),
+                    G, m=m,
+                    t=matrix(QQ, [[i/p,0],[0,k/p]]),
                     max_n=max_n,
                     boxes=G_box)
                     for f in Grits
@@ -255,8 +267,8 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
             for j in range(p):
                 Grit_ij = [
                     specialization_q_expansion(f, N,
-                    G,
-                    t=Matrix([[i/p,j/p],[j/p,0]]),
+                    G, m=m,
+                    t=matrix(QQ, [[i/p,j/p],[j/p,0]]),
                     max_n=max_n,
                     boxes=G_box)
                     for f in Grits
@@ -269,8 +281,8 @@ def Hecke_Tp_q_GritQ(Grits, f_G, s, p, N=277, max_n=20, warnings=None):
                 for k in range(p):
                     Grit_ijk = [
                         specialization_q_expansion(f, N,
-                        G,
-                        t=Matrix([[i/p,j/p],[j/p,k/p]]),
+                        G, m=m,
+                        t=matrix(QQ, [[i/p,j/p],[j/p,k/p]]),
                         max_n=max_n,
                         boxes=G_box)
                         for f in Grits

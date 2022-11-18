@@ -6,10 +6,51 @@ from functools import partial
 from itertools import product
 import numpy as np
 import scipy.sparse as sparse
+from random import shuffle
 load("siegel.sage")
 
-def eta(prec=10):
-    return qexp_eta(ZZ[['q']], prec)
+class ThetaBlock(object):
+    def __init__(self, d, k=2, prec_q=10, prec_z=10, eta_factor=None, theta_dict=dict(), tree_cache=dict(), m=0):
+        self.d = d
+        self.ld = d[:len(d)/2]
+        self.rd = d[len(d)/2:]
+
+        while sum(self.ld) % 2 != 0 or sum(self.rd) % 2 != 0:
+            shuffle(self.d)
+            self.ld = d[:len(d)/2]
+            self.rd = d[len(d)/2:]
+
+        self.theta_dict = theta_dict
+        self.tree_cache = tree_cache
+
+        self.left = single_thread_theta_block(self.ld, k=k/2, prec_q=prec_q, prec_z=prec_z, 
+            eta_factor=1, theta_dict=self.theta_dict, tree_cache=self.tree_cache, m=m)
+
+        self.right = single_thread_theta_block(self.rd, k=k/2, prec_q=prec_q, prec_z=prec_z, 
+            eta_factor=eta_factor, theta_dict=self.theta_dict, tree_cache=self.tree_cache, m=m)
+
+        self.coeffs = dict()
+
+    def coeff(self, m, n):
+        if (m,n) in self.coeffs:
+            return self.coeffs[(m,n)]
+        c = 0
+        for i in self.left.exponents():
+            if i > m:
+                break
+            for j in self.left[i].exponents():
+                try:
+                    c += self.left[i][j] * self.right[m-i][n-j]
+                except:
+                    continue
+
+        self.coeffs[(m,n)] = c
+        return c
+
+
+def eta(prec=10, m=0):
+    R = ZZ.quotient(m)
+    return qexp_eta(R[['q']], prec)
 
 def eta_power(d, k, prec_q=10):
     R.<z> = PowerSeriesRing(ZZ,sparse=True)
@@ -39,8 +80,8 @@ def zeta_half_product(d):
     
 
 def theta_function(d, prec_q=10, prec_z=10, return_d=False):
-    R.<z> = PowerSeriesRing(ZZ,sparse=True)
-    S.<q> = PowerSeriesRing(R,sparse=True)
+    R.<z> = PowerSeriesRing(ZZ, sparse=True)
+    SS.<q> = PolynomialRing(R, sparse=True)
         
     theta = 0
     n = 1
@@ -114,8 +155,8 @@ def multithread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None,
     return block
 
 def single_thread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None, 
-    theta_dict=dict(), tree_cache=dict()):
-    R.<z> = PowerSeriesRing(ZZ, sparse=True)
+    theta_dict=dict(), tree_cache=dict(), m=0):
+    R.<z> = PowerSeriesRing(ZZ.quotient(m), sparse=True)
     S.<q> = PowerSeriesRing(R, sparse=True)
 
     if eta_factor is None:
@@ -136,7 +177,7 @@ def single_thread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None,
 
     block *= q**int(((k + len(d))/12))
 
-    A.<a> = PuiseuxSeriesRing(QQ)
+    A.<a> = PuiseuxSeriesRing(ZZ)
 
     zeta_half_product = 1
     for d_i in d:
@@ -146,6 +187,51 @@ def single_thread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None,
     for e in range(-sum(d)/2, sum(d)/2 + 1):
         zeta_whole_product += zeta_half_product[e]*z**e
     block *= zeta_whole_product
+
+    return block
+
+
+
+def polynomial_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None, 
+    theta_dict=dict(), tree_cache=dict(), m=0):
+    R.<zz,qq> = PolynomialRing(ZZ.quotient(m))
+    S.<z,q> = R.quotient(qq^(prec_q+1))
+
+    if eta_factor is None:
+        # print("Computing eta product...")
+
+        if 2*k < len(d):
+            eta_factor = (eta(prec=prec_q)**(-1))**(len(d) - 2*k)
+        else:
+            eta_factor = eta(prec=prec_q)**(2*k - len(d))
+    block = S(eta_factor)
+    # block = S(1)
+
+    ffs = 0
+
+    for i, d_i in (enumerate(d)):
+        if d_i not in theta_dict:
+            theta_dict[d_i] = theta_function(d_i, prec_q=prec_q, prec_z=prec_z)
+        
+        f = min(min(theta_dict[d_i][t].exponents() for t in theta_dict[d_i].exponents()))
+        ffs += f
+        block *= z^f * theta_dict[d_i]
+        block = block.truncate_powerseries(prec_q)
+
+    block *= q**int(((k + len(d))/12))
+
+    A.<a> = PuiseuxSeriesRing(ZZ)
+
+    zeta_half_product = 1
+    for d_i in d:
+        zeta_half_product *= a^(d_i/2) - a^(-d_i/2)
+
+    zeta_whole_product = 0
+    for e in range(-sum(d)/2, sum(d)/2 + 1):
+        zeta_whole_product += zeta_half_product[e]*z**e
+    block *= zeta_whole_product
+
+    block = block.lift() * zz^-ffs
 
     return block
 
@@ -189,9 +275,14 @@ def Jacobi_level_raising(n, r, m, TB, k=2):
     c = 0
     for d in divisors(gcd(gcd(n,r),m)):
         try:
-            c += d^(k-1) * TB[m*n / d^2][r/d]
+            if isinstance(TB, ThetaBlock):
+                c += d^(k-1) * TB.coeff(m*n / d^2, r/d)
+            else:
+                c += ZZ(d^(k-1)) * TB[m*n / d^2][r/d]
         except:
-            print("Warning: coefficient not found")
+            a = int(m*n/d^2)
+            b = int(r/d)
+            print(f"Warning: coefficient ({n}, {r}, {m}) not found: (q={a},z={b})")
             pass
     return c
 
@@ -309,7 +400,7 @@ def matrix_theta_block(block, coefficients=set(), prec_q=10):
     # acc = truncate_first_axis(acc, prec_q)
     # del eta
 
-    for di in block:
+    for q, di in enumerate(block):
         tdi, shift = matrix_theta_function(di, prec_q=prec_q)
         # print(f"Theta function {di} generated.")
         
@@ -320,6 +411,9 @@ def matrix_theta_block(block, coefficients=set(), prec_q=10):
 
         acc = acc.round()
         acc = truncate_first_axis(acc, prec_q)
+
+        #if q == 5:
+        #    exit()
 
     acc = acc.round().astype("int32")
 
