@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     N = 277
     max_n = 3
-    max_n_hecke = 3
+    max_n_hecke = 12
 
     if len(sys.argv) > 1:
         p = int(sys.argv[1])
@@ -99,20 +99,20 @@ if __name__ == "__main__":
             lift = Gritsenko_lift(TB, T_list)
             Gritsenko_lifts.append(lift)
 
-            try:
-                with open(f"tbs/Grit_TB_{i+1}.json") as json_file:
-                    lift_dump = json.load(json_file)
-            except:
-                print(f"Creating file for Grit(TB{i})")
-                lift_dump = {"Fourier_coefficients": dict()}
-            for detG in lift:
-                if str(detG) not in lift_dump["Fourier_coefficients"]:
-                    lift_dump["Fourier_coefficients"][str(detG)] = dict()
-                for T, aT in lift[detG]:
-                    lift_dump["Fourier_coefficients"][str(detG)][str(matrix2tuple(T))] = str(aT)
+            # try:
+            #     with open(f"tbs/Grit_TB_{i+1}.json") as json_file:
+            #         lift_dump = json.load(json_file)
+            # except:
+            #     print(f"Creating file for Grit(TB{i})")
+            #     lift_dump = {"Fourier_coefficients": dict()}
+            # for detG in lift:
+            #     if str(detG) not in lift_dump["Fourier_coefficients"]:
+            #         lift_dump["Fourier_coefficients"][str(detG)] = dict()
+            #     for T, aT in lift[detG]:
+            #         lift_dump["Fourier_coefficients"][str(detG)][str(matrix2tuple(T))] = str(aT)
 
-            with open(f"tbs/Grit_TB_{i+1}.json", 'w') as f:
-                json.dump(lift_dump, f, indent=4)
+            # with open(f"tbs/Grit_TB_{i+1}.json", 'w') as f:
+            #     json.dump(lift_dump, f, indent=4)
 
             special_lift = specialization_q_expansion(lift, N, s1, m=M, max_n=max_n, boxes=boxes)
             G.append(special_lift)
