@@ -60,6 +60,7 @@ def S_box(N, G, u, d):
 
 def det_box(max_det, N):
     for D in range(1, max_det+1):
+        queue = []
         done = []
 
         if kronecker(-D, N) == -1:
@@ -67,17 +68,23 @@ def det_box(max_det, N):
         r1 = ZZ.quotient(N)(-D).sqrt()
         r2 = -r1
 
-        r = r1.lift()
-        a = 0
-        while D + r^2 > 4*a*N:
-            a += 1
-        if D+r^2 != 4*a*N:
-            r = r2.lift()
+        for b in range(5):
+            r = r1.lift() + b*N
             a = 0
             while D + r^2 > 4*a*N:
                 a += 1
+            if D+r^2 == 4*a*N:
+                queue.append([r, a])
 
-        if D+r^2 == 4*a*N:
+        for b in range(5):
+            r = r2.lift() + b*N
+            a = 0
+            while D + r^2 > 4*a*N:
+                a += 1
+            if D+r^2 == 4*a*N:
+                queue.append([r, a])
+
+        for r, a in queue:
             for n in a.divisors():
                 m = a/n
                 # print(n,r,m*N," ",4*n*m*N-r^2,D)
