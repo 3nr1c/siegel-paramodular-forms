@@ -6,26 +6,14 @@ if __name__ == "__main__":
 
 
     N = 277
-    max_n = 9
-    max_n_hecke = 6
+    max_n = 3
+    max_n_hecke = 9
 
     if len(sys.argv) > 1:
         p = int(sys.argv[1])
     else:
         p = 2
     assert is_prime(p)
-
-    found_m = False
-
-    C = ceil(p^-1 * (1 + p) * (1 + p^2))
-    M = 2*C + 1
-    while not found_m:
-        M = next_prime(M)
-        F.<a> = CyclotomicField(p)
-        found_m = (M % p == 1) and (len(F.primes_above(M)) == F.degree())
-
-    print(f"Using m={M}")
-
 
 
     block_ds_f_277 = [
@@ -78,7 +66,7 @@ if __name__ == "__main__":
         lift = read_coefficients(f"tbs/Grit_TB_{i}.json")
         Gritsenko_lifts.append(lift)
 
-        special_lift = specialization_q_expansion(lift, N, s1, m=M, max_n=max_n, boxes=boxes)
+        special_lift = specialization_q_expansion(lift, N, s1, max_n=max_n, boxes=boxes)
         G.append(special_lift)
 
     
@@ -99,27 +87,11 @@ if __name__ == "__main__":
 
     L.<q> = ZZ[]
     ff = f277(G)
-    f = L(0)
-    for e in ff.exponents():
-        coeff = ZZ(ff[e].lift())
-        while coeff > C:
-            coeff -= M
-        while coeff < -C:
-            coeff += M
-        f += coeff * q^e
 
-    print(f)
+    print(ff)
 
 
     if p > 0:
-        Tpff = (Hecke_Tp_q_GritQ(Gritsenko_lifts, f277, s1, p, m=M, max_n=max_n_hecke))
+        Tpff = (Hecke_Tp_q_GritQ(Gritsenko_lifts, f277, s1, p, max_n=max_n_hecke))
 
-        Tpf = L(0)
-        for e in Tpff.exponents():
-            coeff = ZZ(Tpff[e].lift())
-            while coeff > C:
-                coeff -= M
-            while coeff < -C:
-                coeff += M
-            Tpf += coeff * q^e
-        print(Tpf)
+        print(Tpff)
