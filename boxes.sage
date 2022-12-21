@@ -1,4 +1,5 @@
 import numpy as np
+load("legendre_reduction.sage")
 
 def S_box(N, G, u, d):
     triples = []
@@ -56,6 +57,46 @@ def S_box(N, G, u, d):
             )
 
     # return triples
+
+def det_box(max_det, N):
+    for D in range(1, max_det+1):
+        done = []
+
+        if kronecker(-D, N) == -1:
+            continue
+        r1 = ZZ.quotient(N)(-D).sqrt()
+        r2 = -r1
+
+        r = r1.lift()
+        a = 0
+        while D + r^2 > 4*a*N:
+            a += 1
+        if D+r^2 != 4*a*N:
+            r = r2.lift()
+            a = 0
+            while D + r^2 > 4*a*N:
+                a += 1
+
+        if D+r^2 == 4*a*N:
+            for n in a.divisors():
+                m = a/n
+                # print(n,r,m*N," ",4*n*m*N-r^2,D)
+
+                mat = Matrix([[n, r/2],[r/2,N*m]])
+
+                found_before = False
+                for nat in done:
+                    T, _, v = legendre_reduce(nat, N)
+                    S, _, w = legendre_reduce(mat, N)
+                    if T == S and aut_T_equivalent(T, v, w, N):
+                        found_before = True
+                        break
+
+                if not found_before:
+                    done.append(mat)
+                    yield mat
+
+    return
 
 """
 p = 3
