@@ -5,12 +5,8 @@ import sys
 if __name__ == "__main__":
 
     N = 277
-    max_det = 10000
-
-    print(f"Computing with det(2T) up to {max_det}.")
-
-    print(f"Precomputing Grit boxes...")
-    T_list = list(det_box(max_det, N))
+    max_c = 130000
+    max_det = 250
 
     block_ds_f_277 = [
         [2,4,4,4,5,6,8,9,10,14],
@@ -25,17 +21,18 @@ if __name__ == "__main__":
         [2,2,3,5,6,7,9,9,11,12]
     ]
 
-    prec_q = 1
-    prec_z = ceil(2*sqrt(N * 10))
+    print(f"Computing with det(2T) up to {max_det}.")
 
-    coefficients = set()
-    for T in T_list:
+    print(f"Precomputing Grit boxes...")
+    T_list = list()
+
+    prec_q = 1
+
+    for T in abc_box(max_c, max_det=max_det, N=N):
         n, r, m = T[0][0], 2*T[0][1], T[1][1] / N
+        T_list.append(T)
         prec_q = max(prec_q, m*n)
-        prec_z = max(prec_z, abs(r))
-        for d in divisors(gcd(m,n)):
-            coefficients.add(m*n / d^2)
-    print(prec_q, prec_z)
+    print(prec_q)
 
     print("Computing eta inversion...")
     eta_factor = eta(prec=prec_q)^(-1)
@@ -51,7 +48,7 @@ if __name__ == "__main__":
 
     for i in range(len(block_ds_f_277)):
         print(f"Computing block #{i}.")
-        TB = theta_block(block_ds_f_277[i], prec_q=prec_q, eta_factor=eta_factor, multithread=False, theta_dict=theta_dict, tree_cache=tree_cache)
+        TB = ThetaBlock(block_ds_f_277[i], prec_q=prec_q, eta_factor=eta_factor, m=100)
 
         print("Block has been computed.")
         print("Computing Gritsenko lift...")
@@ -61,9 +58,12 @@ if __name__ == "__main__":
         print("Lift has been computed.")
         print("Saving...")
 
-
-        lift_dump = {"Fourier_coefficients": dict()}
-
+        try:
+            with open(f"tbs/Grit_TB_{i+1}.json") as json_file:
+                lift_dump = json.load(json_file)
+        except:
+            print(f"Creating file for Grit(TB{i})")
+            lift_dump = {"Fourier_coefficients": dict()}
         for detG in lift:
             if str(detG) not in lift_dump["Fourier_coefficients"]:
                 lift_dump["Fourier_coefficients"][str(detG)] = dict()

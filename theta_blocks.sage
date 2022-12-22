@@ -10,42 +10,43 @@ from random import shuffle
 load("siegel.sage")
 
 class ThetaBlock(object):
-    def __init__(self, d, k=2, prec_q=10, prec_z=10, eta_factor=None, theta_dict=dict(), tree_cache=dict(), m=0):
+    def __init__(self, d, k=2, prec_q=10, eta_factor=None, m=0):
         self.d = d
-        self.ld = d[:len(d)/2]
-        self.rd = d[len(d)/2:]
+        self.k = k
+        self.prec_q = prec_q
+        self.m = m
 
-        while sum(self.ld) % 2 != 0 or sum(self.rd) % 2 != 0:
-            shuffle(self.d)
-            self.ld = d[:len(d)/2]
-            self.rd = d[len(d)/2:]
+        if m == 0:
+            self.block = single_thread_theta_block(d, k=k, prec_q=prec_q, eta_factor=eta_factor)
+        else:
+            self.primes = [4]
+            a = 2
+            while prod(self.primes) < m:
+                a = next_prime(a)
+                self.primes.append(a)
 
-        self.theta_dict = theta_dict
-        self.tree_cache = tree_cache
+            self.m = prod(self.primes)
+            
+            with mp.Pool() as pool:
+                work = pool.map(
+                    partial(theta_block_p, d=d, k=k, prec_q=prec_q, eta_factor=eta_factor), self.primes
+                )
 
-        self.left = single_thread_theta_block(self.ld, k=k/2, prec_q=prec_q, prec_z=prec_z, 
-            eta_factor=1, theta_dict=self.theta_dict, tree_cache=self.tree_cache, m=m)
+                self.modp_blocks = dict()
+                for p, block in zip(self.primes, work):
+                    self.modp_blocks[p] = block
 
-        self.right = single_thread_theta_block(self.rd, k=k/2, prec_q=prec_q, prec_z=prec_z, 
-            eta_factor=eta_factor, theta_dict=self.theta_dict, tree_cache=self.tree_cache, m=m)
-
+            
         self.coeffs = dict()
 
     def coeff(self, m, n):
-        if (m,n) in self.coeffs:
-            return self.coeffs[(m,n)]
-        c = 0
-        for i in self.left.exponents():
-            if i > m:
-                break
-            for j in self.left[i].exponents():
-                try:
-                    c += self.left[i][j] * self.right[m-i][n-j]
-                except:
-                    continue
-
-        self.coeffs[(m,n)] = c
-        return c
+        if self.m == 0:
+            return self.block[m][n]
+        else:
+            c = CRT([self.modp_blocks[p][m][n].lift() for p in self.primes], self.primes)
+            if c > self.m / 2:
+                c -= self.m
+            return c
 
 
 def eta(prec=10, m=0):
@@ -79,8 +80,11 @@ def zeta_half_product(d):
     return whole_product
     
 
-def theta_function(d, prec_q=10, prec_z=10, return_d=False):
-    R.<z> = PowerSeriesRing(ZZ, sparse=True)
+def theta_function(d, prec_q=10, prec_z=10, return_d=False, m=0):
+    if is_prime(m):
+        R.<z> = PowerSeriesRing(GF(m), sparse=True)
+    else:
+        R.<z> = PowerSeriesRing(ZZ.quotient(m), sparse=True)
     SS.<q> = PolynomialRing(R, sparse=True)
         
     theta = 0
@@ -156,8 +160,13 @@ def multithread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None,
 
 def single_thread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None, 
     theta_dict=dict(), tree_cache=dict(), m=0):
-    R.<z> = PowerSeriesRing(ZZ.quotient(m), sparse=True)
-    S.<q> = PowerSeriesRing(R, sparse=True)
+    if m == 0:
+        R.<z> = PowerSeriesRing(ZZ)
+    elif is_prime(m):
+        R.<z> = PowerSeriesRing(GF(m))
+    else:
+        R.<z> = PowerSeriesRing(ZZ.quotient(m))
+    S.<q> = PowerSeriesRing(R)
 
     if eta_factor is None:
         # print("Computing eta product...")
@@ -167,12 +176,10 @@ def single_thread_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None,
         else:
             eta_factor = eta(prec=prec_q)**(2*k - len(d))
     block = S(eta_factor)
-    # block = S(1)
 
     for i, d_i in (enumerate(d)):
-        if d_i not in theta_dict:
-            theta_dict[d_i] = theta_function(d_i, prec_q=prec_q, prec_z=prec_z)
-        block *= theta_dict[d_i]
+        print(f"{i}", end='')
+        block *= theta_function(d_i, prec_q=prec_q, prec_z=prec_z, m=m)
         block = block.truncate_powerseries(prec_q)
 
     block *= q**int(((k + len(d))/12))
@@ -211,7 +218,7 @@ def polynomial_theta_block(d, k=2, prec_q=10, prec_z=10, eta_factor=None,
 
     for i, d_i in (enumerate(d)):
         if d_i not in theta_dict:
-            theta_dict[d_i] = theta_function(d_i, prec_q=prec_q, prec_z=prec_z)
+            theta_dict[d_i] = theta_function(d_i, prec_q=prec_q, prec_z=prec_z, m=m)
         
         f = min(min(theta_dict[d_i][t].exponents() for t in theta_dict[d_i].exponents()))
         ffs += f
@@ -271,19 +278,24 @@ def theta_block(*args, **kwargs):
     else:
         return single_thread_theta_block(*args, **kwargs)
 
+
+def theta_block_p(p, d=[], k=2, prec_q=10, eta_factor=None):
+    return theta_block(d, k=k, prec_q=prec_q, eta_factor=eta_factor, m=p)
+
+
 def Jacobi_level_raising(n, r, m, TB, k=2):
     c = 0
     for d in divisors(gcd(gcd(n,r),m)):
-        try:
-            if isinstance(TB, ThetaBlock):
-                c += d^(k-1) * TB.coeff(m*n / d^2, r/d)
-            else:
-                c += ZZ(d^(k-1)) * TB[m*n / d^2][r/d]
-        except:
-            a = int(m*n/d^2)
-            b = int(r/d)
-            print(f"Warning: coefficient ({n}, {r}, {m}) not found: (q={a},z={b})")
-            pass
+        #try:
+        if isinstance(TB, ThetaBlock):
+            c += d^(k-1) * TB.coeff(m*n / d^2, r/d)
+        else:
+            c += ZZ(d^(k-1)) * TB[m*n / d^2][r/d]
+        #except:
+        #    a = int(m*n/d^2)
+        #    b = int(r/d)
+        #    print(f"Warning: coefficient ({n}, {r}, {m}) not found: (q={a},z={b})")
+        #    pass
     return c
 
 

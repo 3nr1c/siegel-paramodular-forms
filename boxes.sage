@@ -105,6 +105,63 @@ def det_box(max_det, N):
 
     return
 
+# 0<=b<=a<=c 
+def abc_box(max_c, max_det=-1, N=277):
+    R.<x> = ZZ.quotient(N)[]
+    done = []
+    
+    for c in tqdm(range(1, max_c+1)):
+        for a in range(0, min(c, max_det//(4*c)) + 1):
+            lower = 4*a*c-max_det if max_det > 0 else 0
+            for b in range(floor(sqrt(max(0, lower))), min(a+1,ceil(float(sqrt(4*a*c))))):
+                # we have a tuple a,b,c
+                TT = Matrix([
+                    [a, b/2],
+                    [b/2, c]
+                ])
+
+                f = a*x^2 + b*x + c
+
+                for v in f.roots(multiplicities=False):
+                    U = Matrix([
+                        [1, v.lift()],
+                        [0, 1]
+                    ])
+                    T = U.T * TT * U
+                    assert T[1][1] % N == 0
+
+                    found_before = False
+                    for mat in done:
+                        R, _, v = legendre_reduce(mat, N)
+                        S, _, w = legendre_reduce(T, N)
+                        if R == S and aut_T_equivalent(R, v, w, N):
+                            found_before = True
+                            break
+
+                    if not found_before:
+                        done.append(T)
+                        yield T
+
+
+                U = Matrix([
+                    [0,  1],
+                    [-1, 0]
+                ])
+                T = U.T * TT * U
+
+                if T[1][1] % N == 0:
+                    found_before = False
+                    for mat in done:
+                        R, _, v = legendre_reduce(mat, N)
+                        S, _, w = legendre_reduce(T, N)
+                        if R == S and aut_T_equivalent(R, v, w, N):
+                            found_before = True
+                            break
+
+                    if not found_before:
+                        done.append(T)
+                        yield T
+
 """
 p = 3
 N = 277

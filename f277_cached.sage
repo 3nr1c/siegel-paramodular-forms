@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     N = 277
     max_n = 3
-    max_n_hecke = 9
+    max_n_hecke = max_n
 
     if len(sys.argv) > 1:
         p = int(sys.argv[1])
